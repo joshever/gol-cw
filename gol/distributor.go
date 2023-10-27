@@ -28,11 +28,7 @@ func distributor(p Params, c distributorChannels) {
 
 	turn := 0
 
-	World := make([][]byte, p.ImageHeight)
-	for k := range World {
-		World[k] = make([]byte, p.ImageWidth)
-	}
-
+	World := createEmptyWorld(p)
 	for j := 0; j < p.ImageHeight; j++ {
 		for i := 0; i < p.ImageWidth; i++ {
 			nextByte := <-c.ioInput
@@ -42,14 +38,14 @@ func distributor(p Params, c distributorChannels) {
 
 	// TODO: Execute all turns of the Game of Life.
 
-	for i:=0; i < p.Turns; i++ {
-		newWorld := calculateNextState(p, World)
-		World = newWorld
+	for i := 0; i < p.Turns; i++ {
+		World = calculateNextState(p, World)
+		turn++
 	}
 
 	// TODO: Report the final state using FinalTurnCompleteEvent.
 	aliveCells := calculateAliveCells(p, World)
-	finalState := FinalTurnComplete { p.Turns, aliveCells }
+	finalState := FinalTurnComplete{turn, aliveCells}
 	c.events <- finalState
 
 	// Make sure that the Io has finished any output before exiting.
@@ -82,6 +78,14 @@ func calculateNextState(p Params, world [][]byte) [][]byte {
 		}
 	}
 	return newWorld
+}
+
+func createEmptyWorld(p Params) [][]byte {
+	World := make([][]byte, p.ImageHeight)
+	for k := range World {
+		World[k] = make([]byte, p.ImageWidth)
+	}
+	return World
 }
 
 func makeNewWorld(p Params, world [][]byte) [][]byte {

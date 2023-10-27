@@ -28,6 +28,18 @@ func distributor(p Params, c distributorChannels) {
 
 	turn := 0
 
+	World := make([][]byte, p.ImageHeight)
+	for k := range World {
+		World[k] = make([]byte, p.ImageWidth)
+	}
+
+	for j := 0; j < p.ImageHeight; j++ {
+		for i := 0; i < p.ImageWidth; i++ {
+			nextByte := <-c.ioInput
+			World[j][i] = nextByte
+		}
+	}
+
 	// TODO: Execute all turns of the Game of Life.
 
 	// TODO: Report the final state using FinalTurnCompleteEvent.

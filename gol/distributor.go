@@ -22,7 +22,7 @@ func distributor(p Params, c distributorChannels) {
 
 	// TODO: Create a 2D slice to store the world.
 
-	filename := fmt.Sprintf("%dx%d", p.ImageWidth, p.ImageHeight) + ".pgm"
+	filename := fmt.Sprintf("%dx%d", p.ImageWidth, p.ImageHeight)
 	c.ioFilename <- filename
 	c.ioCommand <- ioInput
 

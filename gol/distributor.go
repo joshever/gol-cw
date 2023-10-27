@@ -1,6 +1,9 @@
 package gol
 
-import "uk.ac.bris.cs/gameoflife/util"
+import (
+	"fmt"
+	"uk.ac.bris.cs/gameoflife/util"
+)
 
 const ALIVE = byte(255)
 const DEAD = byte(0)
@@ -18,6 +21,10 @@ type distributorChannels struct {
 func distributor(p Params, c distributorChannels) {
 
 	// TODO: Create a 2D slice to store the world.
+
+	filename := fmt.Sprintf("%dx%d", p.ImageWidth, p.ImageHeight) + ".pgm"
+	c.ioFilename <- filename
+	c.ioCommand <- ioInput
 
 	turn := 0
 

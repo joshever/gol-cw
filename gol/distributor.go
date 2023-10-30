@@ -143,7 +143,11 @@ func filter(p Params, world [][]byte) [][]byte {
 	channels := make([]chan [][]byte, p.Threads)
 	for i := 0; i < p.Threads; i++ {
 		channels[i] = make(chan [][]byte)
-		go worker(p, i*newHeight, (i+1)*newHeight, world, channels[i])
+		if i == p.Threads - 1{
+			go worker(p, i*newHeight, p.ImageHeight, world, channels[i])
+		} else{ 
+			go worker(p, i*newHeight, (i+1)*newHeight, world, channels[i])
+		}
 	}
 	for i := 0; i < p.Threads; i++ {
 		// Read from specific channels in order to reassemble

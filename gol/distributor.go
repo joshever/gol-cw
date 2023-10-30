@@ -2,6 +2,7 @@ package gol
 
 import (
 	"fmt"
+	"sync"
 	"time"
 	"uk.ac.bris.cs/gameoflife/util"
 )
@@ -9,8 +10,10 @@ import (
 const ALIVE = byte(255)
 const DEAD = byte(0)
 
-var World [][]byte
-var Turn int
+type World struct {
+	world [][]byte
+	turns int
+}
 
 type distributorChannels struct {
 	events     chan<- Event
@@ -21,55 +24,81 @@ type distributorChannels struct {
 	ioInput    <-chan uint8
 }
 
-func main(p Params, c distributorChannels) {}
-
-func ticker(c distributorChannels) {
-	ticker := time.NewTicker(2 * time.Second)
-	for {
-		select {
-		case <-ticker.C:
-			c.events <- AliveCellsCount{Turn, len(calculateAliveCells(World))}
-		}
-	}
-}
-
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
 
-	// TODO: Create a 2D slice to store the world.
-
-	filename := fmt.Sprintf("%dx%d", p.ImageWidth, p.ImageHeight)
+	// Construct file name and trigger IO to fill channel with file bytes
+	inputFilename := fmt.Sprintf("%dx%d", p.ImageWidth, p.ImageHeight)
 	c.ioCommand <- ioInput
-	c.ioFilename <- filename
+	c.ioFilename <- inputFilename
 
+	// Local turn and world variables
+	// world is filled byte by byte from IO input
 	turn := 0
-
-	World = createEmptyWorld(p)
+	world := createEmptyWorld(p)
 	for j := 0; j < p.ImageHeight; j++ {
 		for i := 0; i < p.ImageWidth; i++ {
 			nextByte := <-c.ioInput
-			World[j][i] = nextByte
+			world[j][i] = nextByte
 		}
 	}
 
-	// TODO: Execute all turns of the Game of Life.
+	// Make local mutex, world struct and done channel
+	var mutex = sync.Mutex{}
+	w := &World{world: world, turns: turn}
+	done := make(chan bool)
 
-	Turn = 0
-	go ticker(c)
+	// Run ticker goroutine
+	go func(w *World, c distributorChannels, done chan bool) {
+		ticker := time.NewTicker(2 * time.Second)
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				// Mutex to cover data race for w
+				mutex.Lock()
+				c.events <- AliveCellsCount{w.turns, len(calculateAliveCells(w.world))}
+				mutex.Unlock()
+			}
+		}
+	}(w, c, done)
+
+	// Running parallel GOL Turns
 	for i := 0; i < p.Turns; i++ {
-		World = parallel(p, World)
-		Turn++
+		// Sequential if 1 thread
+		if p.Threads == 1 {
+			world = calculateNextState(p, world, 0, p.ImageHeight)
+		} else {
+			world = parallel(p, world)
+		}
+		turn++
+		// Update w in mutex
+		mutex.Lock()
+		w.turns = turn
+		w.world = world
+		mutex.Unlock()
 	}
 
-	// TODO: Report the final state using FinalTurnCompleteEvent.
-	aliveCells := calculateAliveCells(World)
+	// Writing PGM file to IO output
+	outputFilename := fmt.Sprintf("%dx%dx%d", p.ImageWidth, p.ImageHeight, p.Turns)
+	c.ioCommand <- ioOutput
+	c.ioFilename <- outputFilename
+	for j := 0; j < p.ImageHeight; j++ {
+		for i := 0; i < p.ImageWidth; i++ {
+			c.ioOutput <- world[j][i]
+		}
+	}
+
+	// Final Turn Complete
+	aliveCells := calculateAliveCells(world)
 	finalState := FinalTurnComplete{turn, aliveCells}
 	c.events <- finalState
+	done <- true
 
 	// Make sure that the Io has finished any output before exiting.
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
-
 	c.events <- StateChange{turn, Quitting}
 
 	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
@@ -79,17 +108,18 @@ func distributor(p Params, c distributorChannels) {
 func calculateNextState(p Params, world [][]byte, startY, endY int) [][]byte {
 	newWorld := makeNewWorld(p, world)
 	for j := startY; j < endY; j++ {
-		for i := range world[0] {
+		for i := 0; i < p.ImageWidth; i++ {
+			aliveNeighbours := findAliveNeighbours(p, world, j, i)
 			if world[j][i] == ALIVE {
-				if findAliveNeighbours(p, world, j, i) < 2 {
+				if aliveNeighbours < 2 {
 					newWorld[j][i] = DEAD
-				} else if findAliveNeighbours(p, world, j, i) <= 3 {
-					continue
+				} else if aliveNeighbours <= 3 {
+					newWorld[j][i] = ALIVE
 				} else {
 					newWorld[j][i] = DEAD
 				}
 			} else {
-				if findAliveNeighbours(p, world, j, i) == 3 {
+				if aliveNeighbours == 3 {
 					newWorld[j][i] = ALIVE
 				}
 			}
@@ -99,14 +129,17 @@ func calculateNextState(p Params, world [][]byte, startY, endY int) [][]byte {
 }
 
 func createEmptyWorld(p Params) [][]byte {
-	World := make([][]byte, p.ImageHeight)
-	for k := range World {
-		World[k] = make([]byte, p.ImageWidth)
+	world := make([][]byte, p.ImageHeight)
+	for k := range world {
+		world[k] = make([]byte, p.ImageWidth)
 	}
-	return World
+	return world
 }
 
 func makeNewWorld(p Params, world [][]byte) [][]byte {
+	if len(world) != p.ImageHeight {
+		print(len(world))
+	}
 	newWorld := make([][]byte, p.ImageHeight)
 	for k := range world {
 		newWorld[k] = make([]byte, p.ImageWidth)
@@ -154,7 +187,6 @@ func calculateAliveCells(world [][]byte) []util.Cell {
 }
 
 func parallel(p Params, world [][]byte) [][]byte {
-
 	var newPixelData [][]byte
 	newHeight := p.ImageHeight / p.Threads
 	// List of channels for each thread

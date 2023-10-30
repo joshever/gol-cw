@@ -146,17 +146,7 @@ func filter(p Params, world [][]byte) [][]byte {
 	} else {
 		for i := 0; i < p.Threads; i++ {
 			channels[i] = make(chan [][]byte)
-			// Cases for extending by 2 when at bottom top and general
-			if i == 0 {
-				// Top case
-				go worker(p, i*newHeight, (i+1)*newHeight+2, world, channels[i], 1)
-			} else if i == p.Threads-1 {
-				// Bottom case
-				go worker(p, i*newHeight-2, (i+1)*newHeight, world, channels[i], 2)
-			} else {
-				// General case
-				go worker(p, i*newHeight-2, (i+1)*newHeight+2, world, channels[i], 3)
-			}
+			go worker(p, i*newHeight, (i+1)*newHeight, world, channels[i])
 		}
 		for i := 0; i < p.Threads; i++ {
 			// Read from specific channels in order to reassemble
@@ -166,17 +156,9 @@ func filter(p Params, world [][]byte) [][]byte {
 	return newPixelData
 }
 
-func worker(p Params, startY, endY int, world [][]byte, out chan<- [][]uint8, route int) {
+func worker(p Params, startY, endY int, world [][]byte, out chan<- [][]uint8) {
 	returned := calculateNextState(p, world, startY, endY)
 	returned = returned[startY:endY]
-	// Process returned to remove extra added at ends
-	//if route == 1 {
-	//	returned = returned[:len(returned)-2]
-	//} else if route == 2 {
-	//	returned = returned[2:]
-	//} else if route == 3 {
-	//	returned = returned[2 : len(returned)-2]
-	//}
 	out <- returned
 }
 

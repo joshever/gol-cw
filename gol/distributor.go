@@ -38,13 +38,14 @@ func distributor(p Params, c distributorChannels) {
 
 	// TODO: Execute all turns of the Game of Life.
 
+	// GOL turn done in parallel with workers
 	for i := 0; i < p.Turns; i++ {
 		World = parallel(p, World)
 		turn++
 	}
 
 	// TODO: Report the final state using FinalTurnCompleteEvent.
-	aliveCells := calculateAliveCells(p, World)
+	aliveCells := calculateAliveCells(World)
 	finalState := FinalTurnComplete{turn, aliveCells}
 	c.events <- finalState
 
@@ -123,7 +124,7 @@ func findAliveNeighbours(p Params, world [][]byte, x int, y int) int {
 	return alive
 }
 
-func calculateAliveCells(p Params, world [][]byte) []util.Cell {
+func calculateAliveCells(world [][]byte) []util.Cell {
 	var cells = []util.Cell{}
 	for j := range world {
 		for i := range world[0] {

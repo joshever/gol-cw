@@ -141,17 +141,13 @@ func filter(p Params, world [][]byte) [][]byte {
 	newHeight := p.ImageHeight / p.Threads
 	// List of channels for each thread
 	channels := make([]chan [][]byte, p.Threads)
-	if p.Threads == 1 {
-		newPixelData = calculateNextState(p, world, 0, p.ImageHeight)
-	} else {
-		for i := 0; i < p.Threads; i++ {
-			channels[i] = make(chan [][]byte)
-			go worker(p, i*newHeight, (i+1)*newHeight, world, channels[i])
-		}
-		for i := 0; i < p.Threads; i++ {
-			// Read from specific channels in order to reassemble
-			newPixelData = append(newPixelData, <-channels[i]...)
-		}
+	for i := 0; i < p.Threads; i++ {
+		channels[i] = make(chan [][]byte)
+		go worker(p, i*newHeight, (i+1)*newHeight, world, channels[i])
+	}
+	for i := 0; i < p.Threads; i++ {
+		// Read from specific channels in order to reassemble
+		newPixelData = append(newPixelData, <-channels[i]...)
 	}
 	return newPixelData
 }
@@ -160,11 +156,4 @@ func worker(p Params, startY, endY int, world [][]byte, out chan<- [][]uint8) {
 	returned := calculateNextState(p, world, startY, endY)
 	returned = returned[startY:endY]
 	out <- returned
-}
-
-// makeImmutableMatrix takes an existing 2D matrix and wraps it in a getter closure.
-func makeImmutableMatrix(matrix [][]byte) func(y, x int) byte {
-	return func(y, x int) byte {
-		return matrix[y][x]
-	}
 }

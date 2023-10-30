@@ -2,11 +2,15 @@ package gol
 
 import (
 	"fmt"
+	"time"
 	"uk.ac.bris.cs/gameoflife/util"
 )
 
 const ALIVE = byte(255)
 const DEAD = byte(0)
+
+var World [][]byte
+var Turn int
 
 type distributorChannels struct {
 	events     chan<- Event
@@ -15,6 +19,18 @@ type distributorChannels struct {
 	ioFilename chan<- string
 	ioOutput   chan<- uint8
 	ioInput    <-chan uint8
+}
+
+func main(p Params, c distributorChannels) {}
+
+func ticker(c distributorChannels) {
+	ticker := time.NewTicker(2 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			c.events <- AliveCellsCount{Turn, len(calculateAliveCells(World))}
+		}
+	}
 }
 
 // distributor divides the work between workers and interacts with other goroutines.
@@ -28,7 +44,7 @@ func distributor(p Params, c distributorChannels) {
 
 	turn := 0
 
-	World := createEmptyWorld(p)
+	World = createEmptyWorld(p)
 	for j := 0; j < p.ImageHeight; j++ {
 		for i := 0; i < p.ImageWidth; i++ {
 			nextByte := <-c.ioInput
@@ -38,10 +54,11 @@ func distributor(p Params, c distributorChannels) {
 
 	// TODO: Execute all turns of the Game of Life.
 
-	// GOL turn done in parallel with workers
+	Turn = 0
+	go ticker(c)
 	for i := 0; i < p.Turns; i++ {
 		World = parallel(p, World)
-		turn++
+		Turn++
 	}
 
 	// TODO: Report the final state using FinalTurnCompleteEvent.

@@ -39,7 +39,7 @@ func distributor(p Params, c distributorChannels) {
 	// TODO: Execute all turns of the Game of Life.
 
 	for i := 0; i < p.Turns; i++ {
-		World = calculateNextState(p, World)
+		World = filter(p, World)
 		turn++
 	}
 
@@ -58,11 +58,11 @@ func distributor(p Params, c distributorChannels) {
 	close(c.events)
 }
 
-func calculateNextState(p Params, world [][]byte) [][]byte {
+func calculateNextState(p Params, world [][]byte, startY, endY int) [][]byte {
 	newWorld := makeNewWorld(p, world)
-	for j := range world {
+	for j := startY; j < endY; j++ {
 		for i := range world[0] {
-			if newWorld[j][i] == ALIVE {
+			if world[j][i] == ALIVE {
 				if findAliveNeighbours(p, world, j, i) < 2 {
 					newWorld[j][i] = DEAD
 				} else if findAliveNeighbours(p, world, j, i) <= 3 {
@@ -133,4 +133,56 @@ func calculateAliveCells(p Params, world [][]byte) []util.Cell {
 		}
 	}
 	return cells
+}
+
+func filter(p Params, world [][]byte) [][]byte {
+
+	var newPixelData [][]byte
+	newHeight := p.ImageHeight / p.Threads
+	// List of channels for each thread
+	channels := make([]chan [][]byte, p.Threads)
+	if p.Threads == 1 {
+		newPixelData = calculateNextState(p, world, 0, p.ImageHeight)
+	} else {
+		for i := 0; i < p.Threads; i++ {
+			channels[i] = make(chan [][]byte)
+			// Cases for extending by 2 when at bottom top and general
+			if i == 0 {
+				// Top case
+				go worker(p, i*newHeight, (i+1)*newHeight+2, world, channels[i], 1)
+			} else if i == p.Threads-1 {
+				// Bottom case
+				go worker(p, i*newHeight-2, (i+1)*newHeight, world, channels[i], 2)
+			} else {
+				// General case
+				go worker(p, i*newHeight-2, (i+1)*newHeight+2, world, channels[i], 3)
+			}
+		}
+		for i := 0; i < p.Threads; i++ {
+			// Read from specific channels in order to reassemble
+			newPixelData = append(newPixelData, <-channels[i]...)
+		}
+	}
+	return newPixelData
+}
+
+func worker(p Params, startY, endY int, world [][]byte, out chan<- [][]uint8, route int) {
+	returned := calculateNextState(p, world, startY, endY)
+	returned = returned[startY:endY]
+	// Process returned to remove extra added at ends
+	//if route == 1 {
+	//	returned = returned[:len(returned)-2]
+	//} else if route == 2 {
+	//	returned = returned[2:]
+	//} else if route == 3 {
+	//	returned = returned[2 : len(returned)-2]
+	//}
+	out <- returned
+}
+
+// makeImmutableMatrix takes an existing 2D matrix and wraps it in a getter closure.
+func makeImmutableMatrix(matrix [][]byte) func(y, x int) byte {
+	return func(y, x int) byte {
+		return matrix[y][x]
+	}
 }

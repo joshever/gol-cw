@@ -64,7 +64,7 @@ func distributor(p Params, c distributorChannels) {
 		}
 	}(w, c, done)
 
-	// Running parallel GOL Turns
+	// Run parallel GOL Turns
 	for i := 0; i < p.Turns; i++ {
 		// Sequential if 1 thread
 		if p.Threads == 1 {

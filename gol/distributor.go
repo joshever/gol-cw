@@ -39,7 +39,7 @@ func distributor(p Params, c distributorChannels) {
 	// TODO: Execute all turns of the Game of Life.
 
 	for i := 0; i < p.Turns; i++ {
-		World = filter(p, World)
+		World = parallel(p, World)
 		turn++
 	}
 
@@ -135,7 +135,7 @@ func calculateAliveCells(p Params, world [][]byte) []util.Cell {
 	return cells
 }
 
-func filter(p Params, world [][]byte) [][]byte {
+func parallel(p Params, world [][]byte) [][]byte {
 
 	var newPixelData [][]byte
 	newHeight := p.ImageHeight / p.Threads
@@ -143,9 +143,9 @@ func filter(p Params, world [][]byte) [][]byte {
 	channels := make([]chan [][]byte, p.Threads)
 	for i := 0; i < p.Threads; i++ {
 		channels[i] = make(chan [][]byte)
-		if i == p.Threads - 1{
+		if i == p.Threads-1 {
 			go worker(p, i*newHeight, p.ImageHeight, world, channels[i])
-		} else{ 
+		} else {
 			go worker(p, i*newHeight, (i+1)*newHeight, world, channels[i])
 		}
 	}

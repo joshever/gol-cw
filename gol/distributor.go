@@ -106,9 +106,11 @@ func distributor(p Params, c distributorChannels) {
 }
 
 func calculateNextState(p Params, world [][]byte, startY, endY int) [][]byte {
+	// Deep Copy each world to avoid shared memory
 	newWorld := makeNewWorld(p, world)
 	for j := startY; j < endY; j++ {
 		for i := 0; i < p.ImageWidth; i++ {
+			// Use un-copied world as operations are read only
 			aliveNeighbours := findAliveNeighbours(p, world, j, i)
 			if world[j][i] == ALIVE {
 				if aliveNeighbours < 2 {
@@ -137,12 +139,8 @@ func createEmptyWorld(p Params) [][]byte {
 }
 
 func makeNewWorld(p Params, world [][]byte) [][]byte {
-	if len(world) != p.ImageHeight {
-		print(len(world))
-	}
-	newWorld := make([][]byte, p.ImageHeight)
+	newWorld := createEmptyWorld(p)
 	for k := range world {
-		newWorld[k] = make([]byte, p.ImageWidth)
 		copy(newWorld[k], world[k])
 	}
 	return newWorld
@@ -193,6 +191,7 @@ func parallel(p Params, world [][]byte) [][]byte {
 	channels := make([]chan [][]byte, p.Threads)
 	for i := 0; i < p.Threads; i++ {
 		channels[i] = make(chan [][]byte)
+		// Cover gaps missed due to rounding in last strip
 		if i == p.Threads-1 {
 			go worker(p, i*newHeight, p.ImageHeight, world, channels[i])
 		} else {
@@ -207,7 +206,9 @@ func parallel(p Params, world [][]byte) [][]byte {
 }
 
 func worker(p Params, startY, endY int, world [][]byte, out chan<- [][]uint8) {
+	// Pass whole world which is then deep copied
 	returned := calculateNextState(p, world, startY, endY)
+	// Slice output into correct strip
 	returned = returned[startY:endY]
 	out <- returned
 }

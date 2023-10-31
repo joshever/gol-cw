@@ -53,6 +53,7 @@ func distributor(p Params, c distributorChannels) {
 	tickerDone := make(chan bool)
 	sdlDone := make(chan bool)
 	turnComplete := make(chan bool)
+	stop := make(chan bool)
 
 	// Run ticker goroutine
 	go func(w *World, c distributorChannels, tickerDone chan bool) {
@@ -70,6 +71,25 @@ func distributor(p Params, c distributorChannels) {
 		}
 	}(w, c, tickerDone)
 
+	// Key Presses goroutine
+	go func(w *World, c distributorChannels, stop chan bool) {
+		for {
+			select {
+			case x := <-c.keys:
+				switch x {
+				case 's':
+					writePgm(p, c, w)
+					clear(c)
+				case 'q':
+					stop <- true
+					clear(c)
+				case 'p':
+					clear(c)
+				}
+			}
+		}
+	}(w, c, stop)
+
 	// Run SDL goroutine
 	go func(w *World, c distributorChannels, sdlDone chan bool, turnComplete chan bool) {
 		for {
@@ -85,33 +105,41 @@ func distributor(p Params, c distributorChannels) {
 		}
 	}(w, c, sdlDone, turnComplete)
 
+outerLoop:
 	// Run parallel GOL Turns
 	for i := 0; i < p.Turns; i++ {
-		old := makeNewWorld(p, world)
-		// Sequential if 1 thread
-		if p.Threads == 1 {
-			world = calculateNextState(p, world, 0, p.ImageHeight)
-		} else {
-			world = parallel(p, world)
-		}
-		turn++
-		for j := 0; j < p.ImageHeight; j++ {
-			for i := 0; i < p.ImageWidth; i++ {
-				if world[j][i] != old[j][i] {
-					c.events <- CellFlipped{turn, util.Cell{i, j}}
+		select {
+		case <-stop:
+			break outerLoop
+		default:
+			old := makeNewWorld(p, world)
+			// Sequential if 1 thread
+			if p.Threads == 1 {
+				world = calculateNextState(p, world, 0, p.ImageHeight)
+			} else {
+				world = parallel(p, world)
+			}
+			turn++
+			for j := 0; j < p.ImageHeight; j++ {
+				for i := 0; i < p.ImageWidth; i++ {
+					if world[j][i] != old[j][i] {
+						c.events <- CellFlipped{turn, util.Cell{i, j}}
+					}
 				}
 			}
+			// Update w in mutex
+			mutex.Lock()
+			w.turns = turn
+			w.world = world
+			mutex.Unlock()
+			turnComplete <- true
 		}
-		// Update w in mutex
-		mutex.Lock()
-		w.turns = turn
-		w.world = world
-		mutex.Unlock()
-		turnComplete <- true
 	}
 
 	// Writing PGM file to IO output
-	writePgm(p, c, world)
+	mutex.Lock()
+	writePgm(p, c, w)
+	mutex.Unlock()
 
 	// Final Turn Complete
 	aliveCells := calculateAliveCells(world)
@@ -129,13 +157,23 @@ func distributor(p Params, c distributorChannels) {
 	close(c.events)
 }
 
-func writePgm(p Params, c distributorChannels, world [][]byte) {
-	outputFilename := fmt.Sprintf("%dx%dx%d", p.ImageWidth, p.ImageHeight, p.Turns)
+func writePgm(p Params, c distributorChannels, w *World) {
+	outputFilename := fmt.Sprintf("%dx%dx%d", p.ImageWidth, p.ImageHeight, w.turns)
 	c.ioCommand <- ioOutput
 	c.ioFilename <- outputFilename
 	for j := 0; j < p.ImageHeight; j++ {
 		for i := 0; i < p.ImageWidth; i++ {
-			c.ioOutput <- world[j][i]
+			c.ioOutput <- w.world[j][i]
+		}
+	}
+}
+
+func clear(c distributorChannels) {
+	for {
+		select {
+		case <-c.keys:
+		default:
+			return
 		}
 	}
 }

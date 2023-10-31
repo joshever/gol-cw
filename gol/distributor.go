@@ -95,7 +95,6 @@ func distributor(p Params, c distributorChannels) {
 			world = parallel(p, world)
 		}
 		turn++
-		turnComplete <- true
 		for j := 0; j < p.ImageHeight; j++ {
 			for i := 0; i < p.ImageWidth; i++ {
 				if world[j][i] != old[j][i] {
@@ -108,6 +107,7 @@ func distributor(p Params, c distributorChannels) {
 		w.turns = turn
 		w.world = world
 		mutex.Unlock()
+		turnComplete <- true
 	}
 
 	// Writing PGM file to IO output

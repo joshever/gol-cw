@@ -54,12 +54,17 @@ func distributor(p Params, c distributorChannels) {
 	sdlDone := make(chan bool)
 	turnComplete := make(chan bool)
 	stop := make(chan bool)
+	pauseDistributor := make(chan bool)
+	pauseTicker := make(chan bool)
+	pause := false
 
 	// Run ticker goroutine
-	go func(w *World, c distributorChannels, tickerDone chan bool) {
+	go func(w *World, c distributorChannels, tickerDone chan bool, pauseTicker chan bool) {
 		ticker := time.NewTicker(2 * time.Second)
 		for {
 			select {
+			case <-pauseTicker:
+				<-pauseTicker
 			case <-tickerDone:
 				return
 			case <-ticker.C:
@@ -69,26 +74,38 @@ func distributor(p Params, c distributorChannels) {
 				mutex.Unlock()
 			}
 		}
-	}(w, c, tickerDone)
+	}(w, c, tickerDone, pauseTicker)
 
 	// Key Presses goroutine
-	go func(w *World, c distributorChannels, stop chan bool) {
+	go func(w *World, c distributorChannels, stop chan bool, pauseDistributor chan bool, pauseTicker chan bool) {
 		for {
 			select {
 			case x := <-c.keys:
 				switch x {
 				case 's':
+					mutex.Lock()
 					writePgm(p, c, w)
 					clearKeys(c)
+					mutex.Unlock()
 				case 'q':
 					stop <- true
 					clearKeys(c)
 				case 'p':
+					pauseDistributor <- true
+					pauseTicker <- true
+					if pause == false {
+						fmt.Println(fmt.Sprintf("Currently processing: %d", turn))
+						pause = true
+					} else {
+						fmt.Println("Continuing")
+						pause = false
+					}
 					clearKeys(c)
+
 				}
 			}
 		}
-	}(w, c, stop)
+	}(w, c, stop, pauseDistributor, pauseTicker)
 
 	// Run SDL goroutine
 	go func(w *World, c distributorChannels, sdlDone chan bool, turnComplete chan bool) {
@@ -109,6 +126,8 @@ outerLoop:
 	// Run parallel GOL Turns
 	for i := 0; i < p.Turns; i++ {
 		select {
+		case <-pauseDistributor:
+			<-pauseDistributor
 		case <-stop:
 			break outerLoop
 		default:

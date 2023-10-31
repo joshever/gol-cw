@@ -99,7 +99,7 @@ func distributor(p Params, c distributorChannels) {
 		for j := 0; j < p.ImageHeight; j++ {
 			for i := 0; i < p.ImageWidth; i++ {
 				if world[j][i] != old[j][i] {
-					c.events <- CellFlipped{0, util.Cell{i, j}}
+					c.events <- CellFlipped{turn, util.Cell{i, j}}
 				}
 			}
 		}

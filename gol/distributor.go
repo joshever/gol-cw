@@ -79,12 +79,12 @@ func distributor(p Params, c distributorChannels) {
 				switch x {
 				case 's':
 					writePgm(p, c, w)
-					clear(c)
+					clearKeys(c)
 				case 'q':
 					stop <- true
-					clear(c)
+					clearKeys(c)
 				case 'p':
-					clear(c)
+					clearKeys(c)
 				}
 			}
 		}
@@ -168,7 +168,7 @@ func writePgm(p Params, c distributorChannels, w *World) {
 	}
 }
 
-func clear(c distributorChannels) {
+func clearKeys(c distributorChannels) {
 	for {
 		select {
 		case <-c.keys:

@@ -22,6 +22,7 @@ type distributorChannels struct {
 	ioFilename chan<- string
 	ioOutput   chan<- uint8
 	ioInput    <-chan uint8
+	keys       <-chan rune
 }
 
 // distributor divides the work between workers and interacts with other goroutines.
@@ -40,20 +41,23 @@ func distributor(p Params, c distributorChannels) {
 		for i := 0; i < p.ImageWidth; i++ {
 			nextByte := <-c.ioInput
 			world[j][i] = nextByte
+			if nextByte == ALIVE {
+				c.events <- CellFlipped{0, util.Cell{i, j}}
+			}
 		}
 	}
 
 	// Make local mutex, world struct and done channel
 	var mutex = sync.Mutex{}
 	w := &World{world: world, turns: turn}
-	done := make(chan bool)
+	tickerDone := make(chan bool)
 
 	// Run ticker goroutine
-	go func(w *World, c distributorChannels, done chan bool) {
+	go func(w *World, c distributorChannels, tickerDone chan bool) {
 		ticker := time.NewTicker(2 * time.Second)
 		for {
 			select {
-			case <-done:
+			case <-tickerDone:
 				return
 			case <-ticker.C:
 				// Mutex to cover data race for w
@@ -62,10 +66,25 @@ func distributor(p Params, c distributorChannels) {
 				mutex.Unlock()
 			}
 		}
-	}(w, c, done)
+	}(w, c, tickerDone)
+
+	// Run SDL goroutine
+	turnComplete := make(chan bool)
+	go func(w *World, c distributorChannels) {
+		for {
+			select {
+			case <-turnComplete:
+				// Mutex to cover data race for w
+				mutex.Lock()
+				c.events <- TurnComplete{w.turns}
+				mutex.Unlock()
+			}
+		}
+	}(w, c)
 
 	// Run parallel GOL Turns
 	for i := 0; i < p.Turns; i++ {
+		old := makeNewWorld(p, world)
 		// Sequential if 1 thread
 		if p.Threads == 1 {
 			world = calculateNextState(p, world, 0, p.ImageHeight)
@@ -73,6 +92,14 @@ func distributor(p Params, c distributorChannels) {
 			world = parallel(p, world)
 		}
 		turn++
+		turnComplete <- true
+		for j := 0; j < p.ImageHeight; j++ {
+			for i := 0; i < p.ImageWidth; i++ {
+				if world[j][i] != old[j][i] {
+					c.events <- CellFlipped{0, util.Cell{i, j}}
+				}
+			}
+		}
 		// Update w in mutex
 		mutex.Lock()
 		w.turns = turn
@@ -81,20 +108,13 @@ func distributor(p Params, c distributorChannels) {
 	}
 
 	// Writing PGM file to IO output
-	outputFilename := fmt.Sprintf("%dx%dx%d", p.ImageWidth, p.ImageHeight, p.Turns)
-	c.ioCommand <- ioOutput
-	c.ioFilename <- outputFilename
-	for j := 0; j < p.ImageHeight; j++ {
-		for i := 0; i < p.ImageWidth; i++ {
-			c.ioOutput <- world[j][i]
-		}
-	}
+	writePgm(p, c, world)
 
 	// Final Turn Complete
 	aliveCells := calculateAliveCells(world)
 	finalState := FinalTurnComplete{turn, aliveCells}
 	c.events <- finalState
-	done <- true
+	tickerDone <- true
 
 	// Make sure that the Io has finished any output before exiting.
 	c.ioCommand <- ioCheckIdle
@@ -103,6 +123,17 @@ func distributor(p Params, c distributorChannels) {
 
 	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
 	close(c.events)
+}
+
+func writePgm(p Params, c distributorChannels, world [][]byte) {
+	outputFilename := fmt.Sprintf("%dx%dx%d", p.ImageWidth, p.ImageHeight, p.Turns)
+	c.ioCommand <- ioOutput
+	c.ioFilename <- outputFilename
+	for j := 0; j < p.ImageHeight; j++ {
+		for i := 0; i < p.ImageWidth; i++ {
+			c.ioOutput <- world[j][i]
+		}
+	}
 }
 
 func calculateNextState(p Params, world [][]byte, startY, endY int) [][]byte {

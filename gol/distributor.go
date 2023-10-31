@@ -56,7 +56,6 @@ func distributor(p Params, c distributorChannels) {
 	stop := make(chan bool)
 	pauseDistributor := make(chan bool)
 	pauseTicker := make(chan bool)
-	pause := false
 
 	// Run ticker goroutine
 	go func(w *World, c distributorChannels, tickerDone chan bool, pauseTicker chan bool) {
@@ -78,6 +77,7 @@ func distributor(p Params, c distributorChannels) {
 
 	// Key Presses goroutine
 	go func(w *World, c distributorChannels, stop chan bool, pauseDistributor chan bool, pauseTicker chan bool) {
+		pause := false
 		for {
 			select {
 			case x := <-c.keys:

@@ -47,10 +47,12 @@ func distributor(p Params, c distributorChannels) {
 		}
 	}
 
-	// Make local mutex, world struct and done channel
+	// Make local mutex, world struct and done channels
 	var mutex = sync.Mutex{}
 	w := &World{world: world, turns: turn}
 	tickerDone := make(chan bool)
+	sdlDone := make(chan bool)
+	turnComplete := make(chan bool)
 
 	// Run ticker goroutine
 	go func(w *World, c distributorChannels, tickerDone chan bool) {
@@ -69,10 +71,11 @@ func distributor(p Params, c distributorChannels) {
 	}(w, c, tickerDone)
 
 	// Run SDL goroutine
-	turnComplete := make(chan bool)
-	go func(w *World, c distributorChannels) {
+	go func(w *World, c distributorChannels, sdlDone chan bool, turnComplete chan bool) {
 		for {
 			select {
+			case <-sdlDone:
+				return
 			case <-turnComplete:
 				// Mutex to cover data race for w
 				mutex.Lock()
@@ -80,7 +83,7 @@ func distributor(p Params, c distributorChannels) {
 				mutex.Unlock()
 			}
 		}
-	}(w, c)
+	}(w, c, sdlDone, turnComplete)
 
 	// Run parallel GOL Turns
 	for i := 0; i < p.Turns; i++ {
@@ -115,6 +118,7 @@ func distributor(p Params, c distributorChannels) {
 	finalState := FinalTurnComplete{turn, aliveCells}
 	c.events <- finalState
 	tickerDone <- true
+	sdlDone <- true
 
 	// Make sure that the Io has finished any output before exiting.
 	c.ioCommand <- ioCheckIdle

@@ -26,12 +26,10 @@ type distributorChannels struct {
 
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
-
 	// Construct file name and trigger IO to fill channel with file bytes
 	inputFilename := fmt.Sprintf("%dx%d", p.ImageWidth, p.ImageHeight)
 	c.ioCommand <- ioInput
 	c.ioFilename <- inputFilename
-
 	// Local turn and world variables
 	// world is filled byte by byte from IO input
 	turn := 0
@@ -45,36 +43,35 @@ func distributor(p Params, c distributorChannels) {
 			}
 		}
 	}
-
-	// Make local mutex, world struct and done channels
+	// Make local mutex, World struct and channels
 	var mutex = sync.Mutex{}
 	w := &World{world: world, turns: turn}
 	tickerDone := make(chan bool)
 	sdlDone := make(chan bool)
+	keyPressesDone := make(chan bool)
 	turnComplete := make(chan bool)
 	pauseDistributor := make(chan bool)
 	pauseTicker := make(chan bool)
 	update := make(chan [][]byte)
-
 	// run ticker goroutine
-	go tick(w, c, tickerDone, pauseTicker, &mutex)
-
+	go ticker(w, c, tickerDone, pauseTicker, &mutex)
 	// run presses goroutines
-	go presses(p, w, c, pauseDistributor, pauseTicker, &mutex)
-
+	go keyPresses(p, w, c, keyPressesDone, pauseDistributor, pauseTicker, &mutex)
 	// run SDL goroutine
-	go graphics(w, c, sdlDone, turnComplete, &mutex)
-
+	go sdl(w, c, sdlDone, turnComplete, &mutex)
 	// Run parallel GOL Turns
 	for i := 0; i < p.Turns; i++ {
 		select {
 		case <-pauseDistributor:
 			<-pauseDistributor
 		default:
+			// Make copy of world
 			old := makeNewWorld(p, world)
+			// Call update state goroutine
 			go next(p, world, update)
 			world = <-update
 			turn++
+			// Cell flipped event
 			for j := 0; j < p.ImageHeight; j++ {
 				for i := 0; i < p.ImageWidth; i++ {
 					if world[j][i] != old[j][i] {
@@ -87,26 +84,25 @@ func distributor(p Params, c distributorChannels) {
 			w.turns = turn
 			w.world = world
 			mutex.Unlock()
+			// Trigger SDL
 			turnComplete <- true
 		}
 	}
-
 	// Writing PGM file to IO output
 	mutex.Lock()
 	writePgm(p, c, w)
 	mutex.Unlock()
 	// Final Turn Complete
-	aliveCells := calculateAliveCells(world)
-	finalState := FinalTurnComplete{turn, aliveCells}
+	finalState := FinalTurnComplete{turn, calculateAliveCells(world)}
 	c.events <- finalState
+	// Terminate go routines
 	tickerDone <- true
 	sdlDone <- true
-
+	keyPressesDone <- true
 	// Make sure that the Io has finished any output before exiting.
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
 	c.events <- StateChange{turn, Quitting}
-
 	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
 	close(c.events)
 }

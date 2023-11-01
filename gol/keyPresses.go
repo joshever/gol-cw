@@ -7,10 +7,12 @@ import (
 )
 
 // Key Presses Function
-func presses(p Params, w *World, c distributorChannels, pauseDistributor chan bool, pauseTicker chan bool, mutex *sync.Mutex) {
+func keyPresses(p Params, w *World, c distributorChannels, keyPressesDone chan bool, pauseDistributor chan bool, pauseTicker chan bool, mutex *sync.Mutex) {
 	pause := false
 	for {
 		select {
+		case <-keyPressesDone:
+			return
 		case x := <-c.keys:
 			switch x {
 			case 's':

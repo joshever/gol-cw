@@ -3,7 +3,7 @@ package gol
 import "sync"
 
 // SDL function
-func graphics(w *World, c distributorChannels, sdlDone chan bool, turnComplete chan bool, mutex *sync.Mutex) {
+func sdl(w *World, c distributorChannels, sdlDone chan bool, turnComplete chan bool, mutex *sync.Mutex) {
 	for {
 		select {
 		case <-sdlDone:

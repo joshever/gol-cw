@@ -2,7 +2,7 @@ package gol
 
 import "uk.ac.bris.cs/gameoflife/util"
 
-func run(p Params, world [][]byte, update chan [][]byte) {
+func next(p Params, world [][]byte, update chan [][]byte) {
 	// Sequential if 1 thread
 	if p.Threads == 1 {
 		world = calculateNextState(p, world, 0, p.ImageHeight)

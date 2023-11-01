@@ -72,7 +72,7 @@ func distributor(p Params, c distributorChannels) {
 			<-pauseDistributor
 		default:
 			old := makeNewWorld(p, world)
-			go run(p, world, update)
+			go next(p, world, update)
 			world = <-update
 			turn++
 			for j := 0; j < p.ImageHeight; j++ {
@@ -111,6 +111,7 @@ func distributor(p Params, c distributorChannels) {
 	close(c.events)
 }
 
+// Declare functions used in goroutines
 func writePgm(p Params, c distributorChannels, w *World) {
 	outputFilename := fmt.Sprintf("%dx%dx%d", p.ImageWidth, p.ImageHeight, w.turns)
 	c.ioCommand <- ioOutput
@@ -121,7 +122,6 @@ func writePgm(p Params, c distributorChannels, w *World) {
 		}
 	}
 }
-
 func clearKeys(c distributorChannels) {
 	for {
 		select {

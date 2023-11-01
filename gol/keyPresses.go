@@ -12,7 +12,6 @@ func presses(p Params, w *World, c distributorChannels, pauseDistributor chan bo
 	for {
 		select {
 		case x := <-c.keys:
-
 			switch x {
 			case 's':
 				mutex.Lock()
@@ -30,7 +29,9 @@ func presses(p Params, w *World, c distributorChannels, pauseDistributor chan bo
 				pauseDistributor <- true
 				pauseTicker <- true
 				if pause == false {
+					mutex.Lock()
 					fmt.Println(fmt.Sprintf("Currently processing: %d", w.turns))
+					mutex.Unlock()
 					pause = true
 				} else {
 					fmt.Println("Continuing")

@@ -55,7 +55,7 @@ func distributor(p Params, c distributorChannels) {
 	update := make(chan [][]byte)
 	// run ticker goroutine
 	go ticker(w, c, tickerDone, pauseTicker, &mutex)
-	// run presses goroutines
+	// run presses goroutine
 	go keyPresses(p, w, c, keyPressesDone, pauseDistributor, pauseTicker, &mutex)
 	// run SDL goroutine
 	go sdl(w, c, sdlDone, turnComplete, &mutex)

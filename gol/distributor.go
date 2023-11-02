@@ -118,12 +118,3 @@ func writePgm(p Params, c distributorChannels, w *World) {
 		}
 	}
 }
-func clearKeys(c distributorChannels) {
-	for {
-		select {
-		case <-c.keys:
-		default:
-			return
-		}
-	}
-}

@@ -44,3 +44,13 @@ func keyPresses(p Params, w *World, c distributorChannels, keyPressesDone chan b
 		}
 	}
 }
+
+func clearKeys(c distributorChannels) {
+	for {
+		select {
+		case <-c.keys:
+		default:
+			return
+		}
+	}
+}

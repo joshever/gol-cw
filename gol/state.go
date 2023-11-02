@@ -1,7 +1,5 @@
 package gol
 
-import "uk.ac.bris.cs/gameoflife/util"
-
 func next(p Params, world [][]byte, update chan [][]byte) {
 	// Sequential if 1 thread
 	if p.Threads == 1 {
@@ -78,18 +76,6 @@ func findAliveNeighbours(p Params, world [][]byte, x int, y int) int {
 		}
 	}
 	return alive
-}
-
-func calculateAliveCells(world [][]byte) []util.Cell {
-	var cells = []util.Cell{}
-	for j := range world {
-		for i := range world[0] {
-			if world[j][i] == byte(255) {
-				cells = append(cells, util.Cell{i, j})
-			}
-		}
-	}
-	return cells
 }
 
 func parallel(p Params, world [][]byte) [][]byte {

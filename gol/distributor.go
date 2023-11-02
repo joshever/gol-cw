@@ -118,3 +118,15 @@ func writePgm(p Params, c distributorChannels, w *World) {
 		}
 	}
 }
+
+func calculateAliveCells(world [][]byte) []util.Cell {
+	var cells = []util.Cell{}
+	for j := range world {
+		for i := range world[0] {
+			if world[j][i] == byte(255) {
+				cells = append(cells, util.Cell{i, j})
+			}
+		}
+	}
+	return cells
+}

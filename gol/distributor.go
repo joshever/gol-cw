@@ -50,9 +50,7 @@ func distributor(p Params, c distributorChannels) {
 	var mutex = sync.Mutex{}
 	w := &World{world: world, turns: turn}
 	tickerDone := make(chan bool)
-	sdlDone := make(chan bool)
 	keyPressesDone := make(chan bool)
-	turnComplete := make(chan bool)
 	pauseDistributor := make(chan bool)
 	pauseTicker := make(chan bool)
 	update := make(chan [][]byte)
@@ -61,8 +59,6 @@ func distributor(p Params, c distributorChannels) {
 	go ticker(w, c, tickerDone, pauseTicker, &mutex)
 	// run presses goroutine
 	go keyPresses(p, w, c, keyPressesDone, pauseDistributor, pauseTicker, &mutex)
-	// run SDL goroutine
-	go sdl(w, c, sdlDone, turnComplete, &mutex)
 
 	// Run parallel GOL Turns
 	for i := 0; i < p.Turns; i++ {
@@ -88,9 +84,8 @@ func distributor(p Params, c distributorChannels) {
 			mutex.Lock()
 			w.turns = turn
 			w.world = world
+			c.events <- TurnComplete{w.turns}
 			mutex.Unlock()
-			// Trigger SDL
-			turnComplete <- true
 		}
 	}
 
@@ -104,7 +99,6 @@ func distributor(p Params, c distributorChannels) {
 	c.events <- finalState
 	// Terminate go routines
 	tickerDone <- true
-	sdlDone <- true
 	keyPressesDone <- true
 	// Make sure that the Io has finished any output before exiting.
 	c.ioCommand <- ioCheckIdle

@@ -26,25 +26,9 @@ type distributorChannels struct {
 
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
-
-	// Construct file name and trigger IO to fill channel with file bytes
-	inputFilename := fmt.Sprintf("%dx%d", p.ImageWidth, p.ImageHeight)
-	c.ioCommand <- ioInput
-	c.ioFilename <- inputFilename
-
-	// Local turn and world variables
-	// world is filled byte by byte from IO input
+	// Setup
 	turn := 0
-	world := createEmptyWorld(p)
-	for j := 0; j < p.ImageHeight; j++ {
-		for i := 0; i < p.ImageWidth; i++ {
-			nextByte := <-c.ioInput
-			world[j][i] = nextByte
-			if nextByte == ALIVE {
-				c.events <- CellFlipped{0, util.Cell{i, j}}
-			}
-		}
-	}
+	world := setup(p, c)
 
 	// Make local mutex, World struct and channels
 	var mutex = sync.Mutex{}
@@ -130,4 +114,25 @@ func calculateAliveCells(world [][]byte) []util.Cell {
 		}
 	}
 	return cells
+}
+
+func setup(p Params, c distributorChannels) [][]byte {
+	// Construct file name and trigger IO to fill channel with file bytes
+	inputFilename := fmt.Sprintf("%dx%d", p.ImageWidth, p.ImageHeight)
+	c.ioCommand <- ioInput
+	c.ioFilename <- inputFilename
+
+	// Local turn and world variables
+	// world is filled byte by byte from IO input
+	world := createEmptyWorld(p)
+	for j := 0; j < p.ImageHeight; j++ {
+		for i := 0; i < p.ImageWidth; i++ {
+			nextByte := <-c.ioInput
+			world[j][i] = nextByte
+			if nextByte == ALIVE {
+				c.events <- CellFlipped{0, util.Cell{i, j}}
+			}
+		}
+	}
+	return world
 }

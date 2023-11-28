@@ -37,7 +37,6 @@ func distributor(p Params, c distributorChannels) {
 	keyPressesDone := make(chan bool)
 	pauseDistributor := make(chan bool)
 	pauseTicker := make(chan bool)
-	update := make(chan [][]byte)
 
 	// run ticker goroutine
 	go ticker(w, c, tickerDone, pauseTicker, &mutex)
@@ -51,16 +50,15 @@ func distributor(p Params, c distributorChannels) {
 			<-pauseDistributor
 		default:
 			// Make copy of world
-			old := makeNewWorld(p, world)
+			old := makeNewWorld(p, world, 0, p.ImageHeight)
 			// Call update state goroutine
-			go next(p, world, update)
-			world = <-update
+			world = next(p, world)
 			turn++
 			// Cell flipped event
 			for j := 0; j < p.ImageHeight; j++ {
-				for i := 0; i < p.ImageWidth; i++ {
-					if world[j][i] != old[j][i] {
-						c.events <- CellFlipped{turn, util.Cell{i, j}}
+				for k := 0; k < p.ImageWidth; k++ {
+					if world[j][k] != old[j][k] {
+						c.events <- CellFlipped{turn, util.Cell{k, j}}
 					}
 				}
 			}
@@ -124,7 +122,7 @@ func setup(p Params, c distributorChannels) [][]byte {
 
 	// Local turn and world variables
 	// world is filled byte by byte from IO input
-	world := createEmptyWorld(p)
+	world := createEmptyWorld(p, 0, p.ImageHeight)
 	for j := 0; j < p.ImageHeight; j++ {
 		for i := 0; i < p.ImageWidth; i++ {
 			nextByte := <-c.ioInput
